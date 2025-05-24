@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --success: #34d399;
+            --danger: #f87171;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background-color: var(--background);
+            color: #1e293b;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .header h1 {
+            color: var(--primary);
+            margin: 0;
+            font-size: 2.5rem;
+        }
+
+        .upload-section {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            text-align: center;
+            border: 2px dashed #cbd5e1;
+            transition: border-color 0.2s;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .custom-file-upload {
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .positive { color: var(--success); }
+        .negative { color: var(--danger); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Expense Tracker</h1>
+        </div>
+
+        <div class="upload-section">
+            <input type="file" id="fileInput" accept=".csv">
+            <label for="fileInput" class="custom-file-upload">
+                Upload CSV File
+            </label>
+        </div>
+
+        <div id="analysisSection" style="display: none;">
+            <div class="stats-grid">
+                <div class="card">
+                    <h2>Balance Summary</h2>
+                    <div class="metric">
+                        <span>Total Credits:</span>
+                        <span class="metric-value positive" id="totalCredits"></span>
+                    </div>
+                    <div class="metric">
+                        <span>Total Debits:</span>
+                        <span class="metric-value negative" id="totalDebits"></span>
+                    </div>
+                    <div class="metric">
+                        <span>Net Balance:</span>
+                        <span class="metric-value" id="netBalance"></span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Transaction Insights</h2>
+                    <div class="metric">
+                        <span>Avg. Daily Credit:</span>
+                        <span class="metric-value" id="avgCredit"></span>
+                    </div>
+                    <div class="metric">
+                        <span>Avg. Daily Debit:</span>
+                        <span class="metric-value" id="avgDebit"></span>
+                    </div>
+                    <div class="metric">
+                        <span>Largest Transaction:</span>
+                        <span class="metric-value" id="largestTransaction"></span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Frequent Transactions</h2>
+                    <div id="frequentParties"></div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 1.5rem;">
+                <h2>Daily Summary</h2>
+                <table id="dailySummary">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Credits</th>
+                            <th>Debits</th>
+                            <th>Net Balance</th>
+                            <th>Transactions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="stats-grid" style="margin-top: 1.5rem;">
+                <div class="card">
+                    <h2>Top Credits</h2>
+                    <div id="topCredits"></div>
+                </div>
+                <div class="card">
+                    <h2>Top Debits</h2>
+                    <div id="topDebits"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', handleFile);
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                const transactions = parseCSV(csv);
+                analyzeData(transactions);
+                document.getElementById('analysisSection').style.display = 'block';
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function parseCSV(csv) {
+            return csv.split('\n').slice(1).filter(line => line.trim()).map(line => {
+                const [date, name, amount, type] = line.split(',').map(item => item.trim());
+                return {
+                    date,
+                    name,
+                    amount: parseFloat(amount),
+                    type
+                };
+            });
+        }
+
+        function formatCurrency(amount) {
+            return '₹' + amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        }
+
+        function groupTransactions(transactions) {
+            return transactions.reduce((acc, transaction) => {
+                const key = transaction.name;
+                if (!acc[key]) {
+                    acc[key] = {
+                        name: key,
+                        total: 0,
+                        type: transaction.type
+                    };
+                }
+                acc[key].total += transaction.amount;
+                return acc;
+            }, {});
+        }
+
+        function analyzeData(transactions) {
+            // Basic Metrics
+            const credits = transactions.filter(t => t.type === 'Credit');
+            const debits = transactions.filter(t => t.type === 'Debit');
+            
+            const totalCredits = credits.reduce((sum, t) => sum + t.amount, 0);
+            const totalDebits = debits.reduce((sum, t) => sum + t.amount, 0);
+            const netBalance = totalCredits - totalDebits;
+
+            document.getElementById('totalCredits').textContent = formatCurrency(totalCredits);
+            document.getElementById('totalDebits').textContent = formatCurrency(totalDebits);
+            document.getElementById('netBalance').textContent = formatCurrency(netBalance);
+            document.getElementById('netBalance').className = 
+                `metric-value ${netBalance >= 0 ? 'positive' : 'negative'}`;
+
+            // Average Daily Calculations
+            const dailyTransactions = transactions.reduce((acc, t) => {
+                acc[t.date] = (acc[t.date] || 0) + 1;
+                return acc;
+            }, {});
+            const totalDays = Object.keys(dailyTransactions).length;
+            
+            const avgCredit = totalCredits / (totalDays || 1);
+            const avgDebit = totalDebits / (totalDays || 1);
+            document.getElementById('avgCredit').textContent = formatCurrency(avgCredit);
+            document.getElementById('avgDebit').textContent = formatCurrency(avgDebit);
+
+            // Frequent Parties
+            const partyCounts = transactions.reduce((acc, t) => {
+                acc[t.name] = (acc[t.name] || 0) + 1;
+                return acc;
+            }, {});
+            
+            const frequent = Object.entries(partyCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+            
+            document.getElementById('frequentParties').innerHTML = frequent
+                .map(([name, count]) => `
+                    <div class="metric">
+                        <span>${name}</span>
+                        <span>${count} transactions</span>
+                    </div>
+                `).join('');
+
+            // Daily Summary
+            const dailySummary = transactions.reduce((acc, t) => {
+                const date = t.date;
+                if (!acc[date]) {
+                    acc[date] = {
+                        credits: 0,
+                        debits: 0,
+                        transactions: []
+                    };
+                }
+                
+                if (t.type === 'Credit') {
+                    acc[date].credits += t.amount;
+                } else {
+                    acc[date].debits += t.amount;
+                }
+                
+                acc[date].transactions.push(t);
+                return acc;
+            }, {});
+
+            const dailyRows = Object.entries(dailySummary).map(([date, data]) => {
+                const net = data.credits - data.debits;
+                return `
+                    <tr>
+                        <td>${date}</td>
+                        <td class="positive">${formatCurrency(data.credits)}</td>
+                        <td class="negative">${formatCurrency(data.debits)}</td>
+                        <td class="${net >= 0 ? 'positive' : 'negative'}">
+                            ${formatCurrency(net)}
+                        </td>
+                        <td>${data.transactions.length}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.querySelector('#dailySummary tbody').innerHTML = dailyRows;
+
+            // Grouped Top Transactions
+            const groupedCredits = Object.values(groupTransactions(credits))
+                .sort((a, b) => b.total - a.total)
+                .slice(0, 5);
+
+            const groupedDebits = Object.values(groupTransactions(debits))
+                .sort((a, b) => b.total - a.total)
+                .slice(0, 5);
+
+            document.getElementById('topCredits').innerHTML = groupedCredits
+                .map(t => `
+                    <div class="metric">
+                        <span>${t.name}</span>
+                        <span class="positive">${formatCurrency(t.total)}</span>
+                    </div>
+                `).join('');
+
+            document.getElementById('topDebits').innerHTML = groupedDebits
+                .map(t => `
+                    <div class="metric">
+                        <span>${t.name}</span>
+                        <span class="negative">${formatCurrency(t.total)}</span>
+                    </div>
+                `).join('');
+
+            // Largest Transaction
+            const allTransactions = [...transactions].sort((a, b) => b.amount - a.amount);
+            const largest = allTransactions[0];
+            document.getElementById('largestTransaction').innerHTML = `
+                ${largest.name}<br>
+                <small>${formatCurrency(largest.amount)} (${largest.type})</small>
+            `;
+        }
+    </script>
+</body>
+</html>
